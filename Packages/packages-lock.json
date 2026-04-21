@@ -111,6 +111,15 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.unity.textmeshpro": {
+      "version": "3.0.9",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.unity.timeline": {
       "version": "1.7.7",
       "depth": 0,
@@ -158,16 +167,6 @@
       "source": "git",
       "dependencies": {},
       "hash": "529a628a915a97799e89e061af9cb7c71407124d"
-    },
-    "media.lightside.unitext": {
-      "version": "https://github.com/LightSideMeowshop/unitext.git#1.0.0",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {
-        "com.unity.ugui": "1.0.0",
-        "com.unity.modules.ui": "1.0.0"
-      },
-      "hash": "93ecdad3c16bdf83dd8989f52d3f36db309639ee"
     },
     "com.unity.modules.ai": {
       "version": "1.0.0",

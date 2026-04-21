@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using LightSide;
 using UnityEngine;
 using UnityEngine.UI;
 using Whisper.Utils;
@@ -19,8 +18,8 @@ namespace Whisper.Samples
 
         [Header("UI")]
         public Button button;
-        public UniText outputText;
-        public UniText timeText;
+        public Text outputText;
+        public Text timeText;
         public ScrollRect scroll;
         public Dropdown languageDropdown;
         public Toggle translateToggle;
@@ -56,13 +55,13 @@ namespace Whisper.Samples
 
             var time = sw.ElapsedMilliseconds;
             var rate = clip.length / (time * 0.001f);
-            timeText.Text = $"Time: {time} ms\nRate: {rate:F1}x";
+            timeText.text = $"Time: {time} ms\nRate: {rate:F1}x";
 
             var text = res.Result;
             if (printLanguage)
                 text += $"\n\nLanguage: {res.Language}";
             
-            outputText.Text = text;
+            outputText.text = text;
             UiUtils.ScrollDown(scroll);
         }
         
@@ -81,7 +80,7 @@ namespace Whisper.Samples
         {
             if (!timeText)
                 return;
-            timeText.Text = $"Progress: {progress}%";
+            timeText.text = $"Progress: {progress}%";
         }
         
         private void OnNewSegment(WhisperSegment segment)
@@ -90,7 +89,7 @@ namespace Whisper.Samples
                 return;
 
             _buffer += segment.Text;
-            outputText.Text = _buffer + "...";
+            outputText.text = _buffer + "...";
             UiUtils.ScrollDown(scroll);
         }
     }
