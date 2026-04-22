@@ -5,7 +5,10 @@ using System.Collections;
 using System.Globalization;
 using SFB; 
 using Whisper;
-using Whisper.Utils; 
+using Novacode; 
+using PdfSharp.Pdf;
+using PdfSharp.Drawing;
+using PdfSharp.Drawing.Layout;
 using UnityEngine.Networking;
 using System.IO;
 using TMPro;
@@ -19,26 +22,26 @@ public class FileTranscriptionHandler : MonoBehaviour
     public Button selectFileButton;
     public Button saveFileButton;
     public Button TranscribeButton;
-    public TMP_Text outputText;
     public TMP_Text statusText; 
     public TMP_Text pathText;
-    public ScrollRect scroll;
     
     public GameObject buttonTemplate;
     public Transform recentFileList;
-    public int Number;
+    public int number;
 
     string currentTranscription;
 
     private string selectedPath;
+    
+    public static FileTranscriptionHandler instance {get; private set;}
 
     void Awake() {
+        instance = this;
         whisperManager.OnProgress += OnProgressHandler;
     }
     
     private void Start() {
         selectFileButton.onClick.AddListener(OpenFileBrowser);
-        saveFileButton.onClick.AddListener(SaveTranscription);
         if (saveFileButton != null) saveFileButton.interactable = false;
         if (TranscribeButton != null) TranscribeButton.interactable = false;
     }
@@ -57,29 +60,9 @@ public class FileTranscriptionHandler : MonoBehaviour
     }
 
     public void StartTranscribe() {
-
         StartCoroutine(LoadAndTranscribe(selectedPath));
     }
-
-    public void UpdatedResentFiles() {
-        if (recentFileList.childCount > 1) {
-            for (int i = recentFileList.childCount - 1; i >= 0; i--) {
-                Destroy(recentFileList.GetChild(i).gameObject);
-            }
-        }
-
-        for (int i = 0; i < Number; i++) {
-            int index = i;
-            GameObject inst = Instantiate(buttonTemplate, recentFileList);
-            AddTextAndListener(inst, index);
-            
-            inst.SetActive(true);
-        }
-    }
-
-    void AddTextAndListener(GameObject inst, int index) {
-        
-    }
+    
     
     private IEnumerator LoadAndTranscribe(string path) {
 
@@ -88,6 +71,8 @@ public class FileTranscriptionHandler : MonoBehaviour
         //Getting the ButtonLogic.cs for created Instantiate
         ButtonLogic buttonLogic =  inst.GetComponent<ButtonLogic>();
         statusText = buttonLogic.progress;
+        
+        inst.transform.SetSiblingIndex(1);
         
         statusText.text = "Loading file...";
 
@@ -103,13 +88,11 @@ public class FileTranscriptionHandler : MonoBehaviour
 
             AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr);
             
-
-            
             //Getting the name of the file
             string nameFile = Path.GetFileNameWithoutExtension(selectedPath);
             
             //Setting the name of the button display to text
-            buttonLogic.name.text = nameFile;
+            buttonLogic.fileNameText.text = nameFile;
             //Getting the time right now and setting it to display to text
             buttonLogic.date.text = DateTime.Now.ToString("MMM dd, yyyy h:mm:ss tt", CultureInfo.GetCultureInfo("en-US"));
             
@@ -128,28 +111,30 @@ public class FileTranscriptionHandler : MonoBehaviour
                 convertedDuration = string.Format("{0:D2}h {1:D2}m", (int)time.TotalHours, time.Minutes);
             }
             
+            buttonLogic.button.interactable = false;
+            
             //Setting date for display to text
             buttonLogic.duration.text = convertedDuration;
-        
+            
             inst.SetActive(true);
             
             //statusText.text = "Transcribing...";
-            RunWhisper(clip);
+            RunWhisper(clip, buttonLogic);
         }
     }
 
-    private async void RunWhisper(AudioClip clip) {
+    private async void RunWhisper(AudioClip clip, ButtonLogic buttonLogic) {
         var res = await whisperManager.GetTextAsync(clip);
         
         if (res != null) {
             currentTranscription = res.Result;
-            if (outputText != null) outputText.text = currentTranscription;
-            if (statusText != null) statusText.text = "ye";
+            if (statusText != null) statusText.text = "Done";
             if (saveFileButton != null) saveFileButton.interactable = true;
+            buttonLogic.button.interactable = true;
             
-            // Automatically scroll to the bottom if a ScrollRect is assigned
-            if (scroll != null)
-                UiUtils.ScrollDown(scroll);
+            //gives for ButtonLogic result of current transcription
+            buttonLogic.transcribe = currentTranscription;
+            
         }
     }
     
@@ -159,7 +144,7 @@ public class FileTranscriptionHandler : MonoBehaviour
         }
     }
 
-    public void SaveTranscription() {
+    public void SaveTranscription(string transcription) {
         if (string.IsNullOrEmpty(currentTranscription)) return;
 
         var extensions = new[] {
@@ -170,15 +155,66 @@ public class FileTranscriptionHandler : MonoBehaviour
         };
         
         var path = StandaloneFileBrowser.SaveFilePanel("Save File", "", "Transcription", extensions);
+        
+        if (string.IsNullOrEmpty(path)) return;
+        
+        string extension = Path.GetExtension(path).ToLower();
 
-        if (!string.IsNullOrEmpty(path)) {
-            try {
-                File.WriteAllText(path, currentTranscription);
-                //statusText.text = "Transcription Saved";
+        try {
+            if (extension == ".docx") {
+                SaveAsDocx(path, transcription);
             }
-            catch (System.Exception e) {
-                statusText.text = $"Failed {e.Message}";
+            else if (extension == ".pdf") {
+                SaveAsPdf(path, transcription);
             }
+            else {
+                File.WriteAllText(path, transcription);
+            }
+            Debug.Log("File Saved Successfully!");
+        }
+        catch (Exception e) {
+            Debug.LogError($"Save Failed: {e.Message}");
+        }
+    }
+    
+    // Logic for Native Word Files
+    private void SaveAsDocx(string path, string text) {
+        // Use DocX specifically to avoid confusion
+        using (DocX document = DocX.Create(path)) {
+            document.InsertParagraph("Transcription Report").Bold().FontSize(18).Alignment = Alignment.center;
+            document.InsertParagraph(System.DateTime.Now.ToString("f")).Italic().Alignment = Alignment.center;
+            document.InsertParagraph("\n" + text);
+            document.Save();
+        }
+    }
+
+    // Logic for PDF Files
+    private void SaveAsPdf(string path, string text) {
+        try {
+            //Create the document
+            PdfDocument document = new PdfDocument();
+            PdfPage page = document.AddPage();
+            XGraphics gfx = XGraphics.FromPdfPage(page);
+
+            //Define Fonts (1.50 uses XFontStyle, not XFontStyleEx)
+            XFont titleFont = new XFont("Arial", 18, XFontStyle.Bold);
+            XFont bodyFont = new XFont("Arial", 11, XFontStyle.Regular);
+
+            //Draw Header
+            gfx.DrawString("Transcription Report", titleFont, XBrushes.Black, 
+                new XRect(0, 40, page.Width, 40), XStringFormats.Center);
+
+            //Content
+            XTextFormatter tf = new XTextFormatter(gfx);
+            XRect rect = new XRect(40, 100, page.Width - 80, page.Height - 140);
+            tf.DrawString(text, bodyFont, XBrushes.Black, rect);
+
+            //Save
+            document.Save(path);
+            Debug.Log("PDF Saved successfully with PDFSharp 1.50!");
+        }
+        catch (Exception e) {
+            Debug.LogError("PDF Error: " + e.Message);
         }
     }
     
