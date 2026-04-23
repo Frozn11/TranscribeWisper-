@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using SFB; 
 using Whisper;
@@ -24,13 +25,14 @@ public class FileTranscriptionHandler : MonoBehaviour
     public Button TranscribeButton;
     public TMP_Text statusText; 
     public TMP_Text pathText;
-    
+    [Space]
     public GameObject buttonTemplate;
     public Transform recentFileList;
     public int number;
-
+    public List<GameObject> ButtonsCollections = new List<GameObject>();
+    
     string currentTranscription;
-
+    
     private string selectedPath;
     
     public static FileTranscriptionHandler instance {get; private set;}
@@ -41,6 +43,7 @@ public class FileTranscriptionHandler : MonoBehaviour
     }
     
     private void Start() {
+        buttonTemplate.SetActive(false);
         selectFileButton.onClick.AddListener(OpenFileBrowser);
         if (saveFileButton != null) saveFileButton.interactable = false;
         if (TranscribeButton != null) TranscribeButton.interactable = false;
@@ -50,8 +53,7 @@ public class FileTranscriptionHandler : MonoBehaviour
         var extensions = new[] { new ExtensionFilter("Audio Files", "mp3", "wav", "ogg", "m4a") };
         var paths = StandaloneFileBrowser.OpenFilePanel("Select File", "", extensions, false);
 
-        if (paths.Length > 0 && !string.IsNullOrEmpty(paths[0]))
-        {
+        if (paths.Length > 0 && !string.IsNullOrEmpty(paths[0])) {
             //StartCoroutine(LoadAndTranscribe(paths[0]));
             selectedPath = paths[0];
             pathText.text = selectedPath;
@@ -68,20 +70,22 @@ public class FileTranscriptionHandler : MonoBehaviour
 
         //Make a copy of the button
         GameObject inst = Instantiate(buttonTemplate,  recentFileList);
+        
+        ButtonsCollections.Add(inst);
+        
         //Getting the ButtonLogic.cs for created Instantiate
         ButtonLogic buttonLogic =  inst.GetComponent<ButtonLogic>();
-        statusText = buttonLogic.progress;
         
         inst.transform.SetSiblingIndex(1);
         
+        statusText = buttonLogic.progress;
         statusText.text = "Loading file...";
 
         // Use AudioType.UNKNOWN to let Unity try to guess the format from the extension
         using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip("file://" + path, AudioType.UNKNOWN)) {
             yield return uwr.SendWebRequest();
 
-            if (uwr.result != UnityWebRequest.Result.Success)
-            {
+            if (uwr.result != UnityWebRequest.Result.Success) {
                 statusText.text = "Error: " + uwr.error;
                 yield break;
             }
@@ -98,7 +102,7 @@ public class FileTranscriptionHandler : MonoBehaviour
             
             float durationSeconds = clip.length;
             //Using TimeSpan for easy formating
-            System.TimeSpan time = System.TimeSpan.FromSeconds(durationSeconds);
+            TimeSpan time = TimeSpan.FromSeconds(durationSeconds);
             string convertedDuration = "";
 
             if (durationSeconds < 60) {
@@ -128,13 +132,18 @@ public class FileTranscriptionHandler : MonoBehaviour
         
         if (res != null) {
             currentTranscription = res.Result;
+            currentTranscription = currentTranscription.TrimStart();
             if (statusText != null) statusText.text = "Done";
             if (saveFileButton != null) saveFileButton.interactable = true;
+            
+            //makes the buttons interactable
             buttonLogic.button.interactable = true;
+            buttonLogic.openThreeDotButton.interactable = true;
+            buttonLogic.renameThreeDotButton.interactable = true;
+            buttonLogic.exportThreeDotButton.interactable = true;
             
             //gives for ButtonLogic result of current transcription
             buttonLogic.transcribe = currentTranscription;
-            
         }
     }
     
